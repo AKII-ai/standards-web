@@ -1,0 +1,18 @@
+{
+  "name": "standards-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check-extract": "node scripts/check-extract.mjs",
+    "check-fuzzy": "node scripts/check-fuzzy.mjs"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
