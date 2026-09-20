@@ -52,13 +52,18 @@ h1 {
 }
 
 .search button,
-.export {
+.export,
+.back {
   padding: 8px 16px;
   border: 1px solid #333;
-  background: #1a56a8;
-  color: #fff;
   font: inherit;
   cursor: pointer;
+}
+
+.search button,
+.export {
+  background: #1a56a8;
+  color: #fff;
 }
 
 .hints { margin: 0 0 8px; color: #444; }
@@ -108,9 +113,19 @@ h1 {
   margin: 0 0 12px;
 }
 
-.toolbar--bottom { justify-content: flex-end; margin: 20px 0 8px; }
+.toolbar--bottom { margin: 20px 0 8px; }
 
-.back { color: #1a56a8; }
+.nav-back { margin: 0 0 12px; }
+
+.back {
+  display: inline-block;
+  background: #fff;
+  color: #222;
+  text-decoration: none;
+}
+
+.back:hover,
+.back:focus-visible { background: #f3f3f3; }
 
 .law-card {
   appearance: none;
@@ -139,6 +154,22 @@ h1 {
   background: #f3f6fb;
   border-color: #1a56a8;
 }
+
+.law-card.has-standards {
+  background: #e7f2e8;
+  border-color: #2f6b3a;
+}
+
+.law-card.has-standards:hover,
+.law-card.has-standards:focus-visible { background: #dcecdc; }
+
+.law-card.has-standards.is-selected,
+.law-card.has-standards.is-selected:hover {
+  background: #e7f2e8;
+  border-color: #2f6b3a;
+}
+
+.pill--ok { border-color: #2f6b3a; color: #21542c; background: #f3faf4; }
 
 .law-card__idx { color: #666; }
 

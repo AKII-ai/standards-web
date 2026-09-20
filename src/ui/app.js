@@ -18,6 +18,8 @@ let searchToken = 0;
 let loadToken = 0;
 let featuredReady = false;
 let lastExport = null;
+let lastSearch = { query: "", laws: [] };
+const standardsCache = new Map();
 
 function setStatus(text, kind = "") {
   els.status.textContent = text;
@@ -40,8 +42,9 @@ function bindCards(root) {
 
 function renderCard(law, i) {
   const repealed = law.repeal && law.repeal !== "None";
+  const has = law.hasStandards === true;
   return `
-    <button type="button" class="law-card${repealed ? " is-repealed" : ""}" data-law-id="${escapeHtml(law.law_id)}" data-title="${escapeHtml(law.title)}" style="--i:${i}">
+    <button type="button" class="law-card${repealed ? " is-repealed" : ""}${has ? " has-standards" : ""}" data-law-id="${escapeHtml(law.law_id)}" data-title="${escapeHtml(law.title)}" style="--i:${i}">
       <span class="law-card__idx">${String(i + 1).padStart(2, "0")}</span>
       <span class="law-card__body">
         <span class="law-card__title">${escapeHtml(law.title)}</span>
@@ -50,13 +53,23 @@ function renderCard(law, i) {
           ${law.law_num ? `<span>${escapeHtml(law.law_num)}</span>` : ""}
           ${law.enforcement_date ? `<span>施行 ${escapeHtml(law.enforcement_date)}</span>` : ""}
           ${repealed ? `<span class="pill pill--warn">廃止等</span>` : ""}
+          ${has ? `<span class="pill pill--ok">基準値あり</span>` : ""}
         </span>
       </span>
       <span class="law-card__id">${escapeHtml(law.law_id)}</span>
     </button>`;
 }
 
+function searchStatus(laws, probing = false) {
+  const n = laws.length;
+  const known = laws.filter((l) => l.hasStandards === true).length;
+  if (probing && known === 0) return `${n}件（近い名前順）。基準値の有無を確認しています…`;
+  if (known) return `${n}件（近い名前順）。基準値がある法令は緑色です（${known}件）。`;
+  return `${n}件（近い名前順）`;
+}
+
 function resetToHome() {
+  lastSearch = { query: "", laws: [] };
   els.input.value = "";
   els.results.innerHTML = "";
   els.results.hidden = true;
@@ -64,6 +77,36 @@ function resetToHome() {
   els.detail.innerHTML = "";
   lastExport = null;
   loadFeatured();
+}
+
+function restoreSearchList() {
+  els.detail.hidden = true;
+  els.detail.innerHTML = "";
+  lastExport = null;
+  els.featured.hidden = true;
+  els.results.hidden = false;
+  els.input.value = lastSearch.query;
+  const cards = [...els.results.querySelectorAll("[data-law-id]")];
+  const sameList = cards.length === lastSearch.laws.length
+    && lastSearch.laws.every((law, i) => cards[i]?.dataset.lawId === law.law_id);
+  if (sameList) {
+    cards.forEach((btn) => {
+      btn.hidden = false;
+      btn.disabled = false;
+      btn.classList.remove("is-selected");
+    });
+    setStatus(searchStatus(lastSearch.laws));
+  } else {
+    paintSearchResults(lastSearch.laws);
+  }
+  window.scrollTo({ top: 0 });
+}
+
+function paintSearchResults(laws) {
+  els.results.hidden = false;
+  els.results.innerHTML = laws.map((law, i) => renderCard(law, i)).join("");
+  bindCards(els.results);
+  setStatus(searchStatus(laws, laws.some((l) => l.hasStandards == null)));
 }
 
 function showHome() {
@@ -75,12 +118,26 @@ function showHome() {
 }
 
 function isolateSelected(lawId, title) {
-  const source = document.querySelector(`[data-law-id="${CSS.escape(lawId)}"]`);
   els.featured.hidden = true;
   els.results.hidden = false;
+  if (lastSearch.query) {
+    const cards = [...els.results.querySelectorAll("[data-law-id]")];
+    const found = cards.find((btn) => btn.dataset.lawId === lawId);
+    if (found) {
+      cards.forEach((btn) => {
+        const match = btn.dataset.lawId === lawId;
+        btn.hidden = !match;
+        btn.disabled = match;
+        btn.classList.toggle("is-selected", match);
+      });
+      return;
+    }
+  }
+  const source = document.querySelector(`[data-law-id="${CSS.escape(lawId)}"]`);
   els.results.innerHTML = "";
   if (source) {
     const clone = source.cloneNode(true);
+    clone.hidden = false;
     clone.disabled = true;
     clone.classList.add("is-selected");
     clone.removeAttribute("style");
@@ -111,7 +168,7 @@ export async function loadFeatured() {
     showHome();
     return;
   }
-  els.featured.innerHTML = `<p class="progress">土壌汚染まわりの法令を読み込んでいます…</p>`;
+  els.featured.innerHTML = `<p class="progress">よく使う法令を読み込んでいます…</p>`;
   els.featured.hidden = false;
   try {
     const cards = await Promise.all(
@@ -126,10 +183,12 @@ export async function loadFeatured() {
         return { ...seed, law_num: "", enforcement_date: "", repeal: "None" };
       }),
     );
-    const byId = new Map(cards.map((c) => [c.law_id, c]));
+    const byId = new Map(cards.map((c) => {
+      const has = standardsCache.has(c.law_id) ? standardsCache.get(c.law_id) : null;
+      return [c.law_id, { ...c, hasStandards: has }];
+    }));
     els.featured.innerHTML = `
-      <h2 class="featured__heading">土壌汚染まわり</h2>
-      <p class="featured__lead">よく使う入口です。大気・土壌・地下水でも検索できます。</p>
+      <h2 class="featured__heading">よく使うもの</h2>
       ${FEATURED.map((group) => `
         <section class="featured__group">
           <h3>${escapeHtml(group.name)}</h3>
@@ -141,6 +200,7 @@ export async function loadFeatured() {
     bindCards(els.featured);
     featuredReady = true;
     showHome();
+    void markStandards([...byId.values()]);
   } catch (err) {
     els.featured.innerHTML = `<p class="status status--error">${escapeHtml(describeCorsFailure(err))}</p>`;
   }
@@ -150,6 +210,7 @@ export async function runSearch(raw) {
   const q = String(raw || "").trim();
   const token = ++searchToken;
   if (!q) {
+    lastSearch = { query: "", laws: [] };
     els.results.innerHTML = "";
     await loadFeatured();
     return;
@@ -158,6 +219,8 @@ export async function runSearch(raw) {
   els.results.hidden = false;
   els.results.innerHTML = "";
   els.detail.hidden = true;
+  els.detail.innerHTML = "";
+  lastExport = null;
   setStatus("検索しています…");
   const queries = expandQuery(q);
   try {
@@ -169,18 +232,75 @@ export async function runSearch(raw) {
     const jsons = await Promise.all(batches);
     if (token !== searchToken) return;
     const entries = jsons.flatMap((j) => j.laws || []);
-    const ranked = rankLaws(entries, queries);
+    const ranked = rankLaws(entries, queries).map((law) => ({
+      ...law,
+      hasStandards: standardsCache.has(law.law_id) ? standardsCache.get(law.law_id) : null,
+    }));
+    lastSearch = { query: q, laws: ranked };
     if (!ranked.length) {
       setStatus("近い法令が見つかりませんでした。告示・条例は e-Gov API の対象外です。", "empty");
       return;
     }
-    setStatus(`${ranked.length}件（近い名前順）`);
-    els.results.innerHTML = ranked.map((law, i) => renderCard(law, i)).join("");
-    bindCards(els.results);
+    paintSearchResults(ranked);
+    await markStandards(ranked, { token, updateStatus: true });
   } catch (err) {
     if (token !== searchToken) return;
     setStatus(describeCorsFailure(err), "error");
   }
+}
+
+function applyStandardsMark(lawId, has) {
+  const law = lastSearch.laws.find((item) => item.law_id === lawId);
+  if (law) law.hasStandards = has;
+  document.querySelectorAll(`[data-law-id="${CSS.escape(lawId)}"]`).forEach((btn) => {
+    if (!btn.classList.contains("law-card")) return;
+    btn.classList.toggle("has-standards", has);
+    if (!has) return;
+    const meta = btn.querySelector(".law-card__meta");
+    if (meta && !meta.querySelector(".pill--ok")) {
+      meta.insertAdjacentHTML("beforeend", `<span class="pill pill--ok">基準値あり</span>`);
+    }
+  });
+}
+
+async function probeHasStandards(lawId) {
+  if (standardsCache.has(lawId)) return standardsCache.get(lawId);
+  const data = await fetchLawData(lawId);
+  const has = extractRecords(data).length > 0;
+  standardsCache.set(lawId, has);
+  return has;
+}
+
+async function markStandards(laws, { token = null, updateStatus = false } = {}) {
+  const stillCurrent = () => token == null || token === searchToken;
+  const pending = laws.filter((law) => law.hasStandards == null);
+  const refreshStatus = (probing) => {
+    if (updateStatus && stillCurrent() && els.detail.hidden) {
+      setStatus(searchStatus(token == null ? laws : lastSearch.laws, probing));
+    }
+  };
+  if (!pending.length) {
+    refreshStatus(false);
+    return;
+  }
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(3, pending.length) }, async () => {
+    while (cursor < pending.length) {
+      if (!stillCurrent()) return;
+      const law = pending[cursor];
+      cursor += 1;
+      try {
+        const has = await probeHasStandards(law.law_id);
+        if (!stillCurrent()) return;
+        applyStandardsMark(law.law_id, has);
+        refreshStatus(true);
+      } catch {
+        /* 判定できない法令は色を付けない */
+      }
+    }
+  });
+  await Promise.all(workers);
+  refreshStatus(false);
 }
 
 export async function selectLaw(lawId, title = "") {
@@ -191,6 +311,7 @@ export async function selectLaw(lawId, title = "") {
   els.detail.hidden = false;
   setStatus(`「${title || lawId}」の条文を取得しています…`);
   els.detail.innerHTML = `
+    ${backControl()}
     <section class="panel panel--loading">
       <p class="progress-kicker">選択した法令</p>
       <h2 class="progress-title">${escapeHtml(title || lawId)}</h2>
@@ -223,18 +344,21 @@ export async function selectLaw(lawId, title = "") {
   }
 }
 
+function backControl() {
+  return `<p class="nav-back"><a class="back" href="#/">法令一覧に戻る</a></p>`;
+}
+
 function renderDetail(title, lawId, bodies) {
   const rows = bodies.flatMap((data) => extractRecords(data));
   const { dates, eras } = groupByEra(rows);
   lastExport = null;
-  const back = `<p class="toolbar">
-        <a class="back" href="#/">一覧に戻る</a>
-      </p>`;
+  standardsCache.set(lawId, rows.length > 0);
+  applyStandardsMark(lawId, rows.length > 0);
   if (!rows.length) {
     setStatus("この法令から数値基準は見つかりませんでした。", "empty");
     els.detail.innerHTML = `
+      ${backControl()}
       <section class="panel panel--empty">
-        ${back}
         <header class="detail-head">
           <h2>${escapeHtml(title)}</h2>
           <p class="detail-meta">法令ID ${escapeHtml(lawId)}</p>
@@ -248,9 +372,10 @@ function renderDetail(title, lawId, bodies) {
   setStatus(`${rows.length}行の基準値（${dates.length}版）`);
   const range = dates.length ? `${dates[0]} 〜 ${dates[dates.length - 1]}` : "—";
   els.detail.innerHTML = `
+    ${backControl()}
     <section class="panel">
       <p class="toolbar">
-        <a class="back" href="#/">一覧に戻る</a>
+        <a class="back" href="#/">法令一覧に戻る</a>
         <button type="button" class="export" id="export-xlsx">Excel出力</button>
       </p>
       <header class="detail-head">
@@ -262,6 +387,7 @@ function renderDetail(title, lawId, bodies) {
       </header>
       ${eras.map(renderEra).join("")}
       <p class="toolbar toolbar--bottom">
+        <a class="back" href="#/">法令一覧に戻る</a>
         <button type="button" class="export" id="export-xlsx-bottom">Excel出力</button>
       </p>
       <footer class="notes">
@@ -336,6 +462,10 @@ export function bindApp() {
     const id = hashLawId();
     if (id) {
       selectLaw(id);
+      return;
+    }
+    if (lastSearch.query) {
+      restoreSearchList();
       return;
     }
     els.detail.hidden = true;

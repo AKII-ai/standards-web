@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check-extract": "node scripts/check-extract.mjs",
+    "check-extract": "node --import ./scripts/txt-raw-register.mjs scripts/check-extract.mjs",
     "check-fuzzy": "node scripts/check-fuzzy.mjs"
   },
   "devDependencies": {

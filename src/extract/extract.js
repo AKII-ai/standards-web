@@ -1,11 +1,13 @@
 /** 別表／号列記からの基準値抽出。scripts/extract.py と同等（絞り込み・意味ラベルなし）。 */
 
 import { findAll, nodeText } from "./tree.js";
+import { itemHintFromText } from "./unitHints.js";
+import UNIT_HINTS_TEXT from "./unit_hints.txt?raw";
 import { kanjiToNumber, parseValue } from "./value.js";
 
 const KANJI_NUM_ONLY = /^[〇一二三四五六七八九十百千]+$/;
 const SEA_SPLIT = /(海域以外の公共用水域に排出されるもの|海域に排出されるもの)/;
-const ITEM_HINT = /ミリグラム|水素指数|コロニー形成単位/;
+const ITEM_HINT = itemHintFromText(UNIT_HINTS_TEXT);
 
 function splitSeaCondition(text) {
   const parts = String(text).split(SEA_SPLIT);
