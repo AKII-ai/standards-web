@@ -382,10 +382,14 @@ function bindExport(payload) {
   });
   els.detail.querySelectorAll("[data-export]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const withChanges = Boolean(els.detail.querySelector('input[name^="export-kind-"]:checked[value="changes"]'));
-      const data = { ...payload, withChanges };
-      if (btn.dataset.export === "md") downloadStandardsMd(data);
-      else downloadStandardsXlsx(data);
+      try {
+        const withChanges = Boolean(els.detail.querySelector('input[name^="export-kind-"]:checked[value="changes"]'));
+        const data = { ...payload, withChanges };
+        if (btn.dataset.export === "md") downloadStandardsMd(data);
+        else downloadStandardsXlsx(data);
+      } catch (err) {
+        setStatus(err?.message || "出力に失敗しました。", "error");
+      }
     });
   });
 }

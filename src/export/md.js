@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from "fflate";
-import { eraStamp, kindLabel, safeDownloadName, uniqueName } from "./table.js";
+import { eraStamp, eraTable, kindLabel, safeDownloadName, uniqueName } from "./table.js";
 
 function escapeCell(s) {
   return String(s ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
@@ -35,10 +35,14 @@ export function downloadStandardsMd({ title, eras, mode, withChanges }) {
     files[name] = strToU8(eraMarkdown(title, era, mode, withChanges));
   }
   const zipped = zipSync(files, { level: 6 });
-  const blob = new Blob([zipped], { type: "application/zip" });
+  const bytes = new Uint8Array(zipped);
+  const blob = new Blob([bytes], { type: "application/zip" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${safeDownloadName(title)}_${kindLabel(withChanges)}.zip`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
