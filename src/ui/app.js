@@ -405,7 +405,7 @@ function renderDetail(title, lawId, bodies) {
     : "★新設／★改正は、1つ前の収録版との比較。括弧書きは条文の文言そのまま。当分の間は暫定基準。"}</p>
         <p>告示・条例の上乗せ基準は含まない。${matrix
     ? "並びと別表の意味は src/layouts の Markdown で指定しています。"
-    : "並びはAPIが返した順。"}Excelは改正（施行）年ごとにシートを分けています。</p>
+    : "並びはAPIが返した順。"}Excelは改正（施行）年ごとにシートを分けています。列の境目をドラッグすると、その列の幅が変わります。</p>
       </footer>
     </section>`;
   els.detail.querySelectorAll(".export").forEach((btn) => {
@@ -413,6 +413,110 @@ function renderDetail(title, lawId, bodies) {
       if (lastExport) downloadStandardsXlsx(lastExport);
     });
   });
+  colShares = null;
+  layoutColumns();
+}
+
+let colShares = null;
+let layingOut = false;
+
+function colGroup(count) {
+  return `<colgroup>${Array.from({ length: count }, () => "<col>").join("")}</colgroup>`;
+}
+
+function layoutColumns() {
+  if (layingOut) return;
+  const tables = [...els.detail.querySelectorAll("table")];
+  if (!tables.length) {
+    colShares = null;
+    return;
+  }
+  const count = tables[0].tHead?.rows[0]?.cells.length || 0;
+  if (!count) return;
+  layingOut = true;
+  try {
+    if (!colShares || colShares.length !== count) {
+      colShares = Array.from({ length: count }, () => 100 / count);
+    }
+    for (const table of tables) {
+      const cols = table.querySelectorAll("col");
+      if (cols.length !== colShares.length) continue;
+      colShares.forEach((share, i) => {
+        cols[i].style.width = `${share}%`;
+      });
+    }
+    placeColHandles();
+  } finally {
+    layingOut = false;
+  }
+}
+
+function placeColHandles() {
+  els.detail.querySelectorAll(".col-resize").forEach((el) => el.remove());
+  for (const table of els.detail.querySelectorAll("table")) {
+    const scroll = table.closest(".table-scroll");
+    const cells = table.tHead?.rows[0]?.cells;
+    if (!scroll || !cells || cells.length < 2) continue;
+    const scrollRect = scroll.getBoundingClientRect();
+    const tableRect = table.getBoundingClientRect();
+    for (let i = 0; i < cells.length - 1; i += 1) {
+      const edge = cells[i].getBoundingClientRect().right;
+      const handle = document.createElement("div");
+      handle.className = "col-resize";
+      handle.dataset.col = String(i);
+      handle.title = "ドラッグで列の幅を変える";
+      handle.style.left = `${edge - scrollRect.left - 4}px`;
+      handle.style.top = `${tableRect.top - scrollRect.top}px`;
+      handle.style.height = `${tableRect.height}px`;
+      scroll.appendChild(handle);
+    }
+  }
+}
+
+function bindTableResize() {
+  els.detail.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest?.(".col-resize");
+    if (!handle || e.button !== 0) return;
+    const index = Number(handle.dataset.col);
+    const table = handle.closest(".table-scroll")?.querySelector("table");
+    if (!table || !colShares || !Number.isInteger(index) || index >= colShares.length - 1) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startShares = colShares.slice();
+    const width = table.getBoundingClientRect().width || 1;
+    const move = (ev) => {
+      const minShare = Math.min(18, (72 / width) * 100);
+      let left = startShares[index] + ((ev.clientX - startX) / width) * 100;
+      let right = startShares[index + 1] - ((ev.clientX - startX) / width) * 100;
+      if (left < minShare) {
+        right -= minShare - left;
+        left = minShare;
+      }
+      if (right < minShare) {
+        left -= minShare - right;
+        right = minShare;
+      }
+      colShares = startShares.slice();
+      colShares[index] = left;
+      colShares[index + 1] = right;
+      layoutColumns();
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  });
+  window.addEventListener("resize", () => {
+    if (els.detail.querySelector("table")) placeColHandles();
+  });
+  const observer = new MutationObserver(() => {
+    if (!layingOut && els.detail.querySelector("table")) layoutColumns();
+  });
+  observer.observe(els.detail, { childList: true });
 }
 
 function renderEra(era) {
@@ -427,7 +531,9 @@ function renderEra(era) {
     <article class="era">
       <h3>施行 ${escapeHtml(era.start)} 〜 ${escapeHtml(era.end)}</h3>
       <div class="table-wrap">
+        <div class="table-scroll">
         <table>
+          ${colGroup(4)}
           <thead>
             <tr><th>表/条</th><th>項目（条文表記）</th><th>条件</th><th>基準値</th></tr>
           </thead>
@@ -445,6 +551,7 @@ function renderEra(era) {
             }).join("")}
           </tbody>
         </table>
+        </div>
       </div>
       ${notes}
     </article>`;
@@ -465,7 +572,9 @@ function renderMatrixEra(era) {
     <article class="era">
       <h3>施行 ${escapeHtml(era.start)} 〜 ${escapeHtml(era.end)}</h3>
       <div class="table-wrap">
+        <div class="table-scroll">
         <table class="matrix">
+          ${colGroup(era.headers.length)}
           <thead>
             <tr>${era.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>
           </thead>
@@ -480,6 +589,7 @@ function renderMatrixEra(era) {
             }).join("")}
           </tbody>
         </table>
+        </div>
       </div>
       ${notes}
       ${fallback}
@@ -507,6 +617,7 @@ export function bindApp() {
     clearTimeout(t);
     t = setTimeout(() => runSearch(els.input.value), 380);
   });
+  bindTableResize();
   window.addEventListener("hashchange", () => {
     const id = hashLawId();
     if (id) {
