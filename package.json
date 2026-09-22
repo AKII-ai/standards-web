@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check-extract": "node --import ./scripts/txt-raw-register.mjs scripts/check-extract.mjs",
-    "check-fuzzy": "node scripts/check-fuzzy.mjs"
+    "check-fuzzy": "node scripts/check-fuzzy.mjs",
+    "check-matrix": "node --import ./scripts/txt-raw-register.mjs scripts/check-matrix.mjs"
   },
   "devDependencies": {
     "vite": "^6.3.5"

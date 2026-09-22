@@ -1,6 +1,8 @@
 import { describeCorsFailure, fetchLawData, fetchRevisions, searchLaws } from "../api/egov.js";
 import { downloadStandardsXlsx } from "../export/xlsx.js";
 import { extractRecords, formatValue, groupByEra } from "../extract/extract.js";
+import { buildMatrixEras } from "../extract/matrix.js";
+import { getLayout } from "../layouts/index.js";
 import { expandQuery, isKana, toHiragana } from "../search/aliases.js";
 import { FEATURED } from "../search/featured.js";
 import { lawCard, rankLaws } from "../search/rank.js";
@@ -368,9 +370,16 @@ function renderDetail(title, lawId, bodies) {
       </section>`;
     return;
   }
-  lastExport = { title, eras };
-  setStatus(`${rows.length}行の基準値（${dates.length}版）`);
-  const range = dates.length ? `${dates[0]} 〜 ${dates[dates.length - 1]}` : "—";
+  const layout = getLayout(lawId);
+  const matrix = layout ? buildMatrixEras(rows, layout) : null;
+  lastExport = matrix
+    ? { title, mode: "matrix", eras: matrix.eras }
+    : { title, eras };
+  const usedDates = matrix ? matrix.dates : dates;
+  setStatus(matrix
+    ? `${matrix.eras.reduce((n, e) => n + e.body.length, 0)}物質（${usedDates.length}版）`
+    : `${rows.length}行の基準値（${dates.length}版）`);
+  const range = usedDates.length ? `${usedDates[0]} 〜 ${usedDates[usedDates.length - 1]}` : "—";
   els.detail.innerHTML = `
     ${backControl()}
     <section class="panel">
@@ -382,17 +391,21 @@ function renderDetail(title, lawId, bodies) {
         <h2>${escapeHtml(title)}</h2>
         <p class="detail-meta">
           法令ID ${escapeHtml(lawId)}　／　出典 e-Gov法令API　／　
-          収録 ${dates.length}版（${escapeHtml(range)} 施行）。これより古い版はAPIにありません。
+          収録 ${usedDates.length}版（${escapeHtml(range)} 施行）。これより古い版はAPIにありません。
         </p>
       </header>
-      ${eras.map(renderEra).join("")}
+      ${matrix ? matrix.eras.map(renderMatrixEra).join("") : eras.map(renderEra).join("")}
       <p class="toolbar toolbar--bottom">
         <a class="back" href="#/">法令一覧に戻る</a>
         <button type="button" class="export" id="export-xlsx-bottom">Excel出力</button>
       </p>
       <footer class="notes">
-        <p>★新設／★改正は、1つ前の収録版との比較。括弧書きは条文の文言そのまま。当分の間は暫定基準。</p>
-        <p>告示・条例の上乗せ基準は含まない。並びはAPIが返した順。Excelは改正（施行）年ごとにシートを分けています。</p>
+        <p>${matrix
+    ? "★は1つ前の収録版からの追加物質または基準値の変更（物質名の前に1回）。該当しない組合せは－。"
+    : "★新設／★改正は、1つ前の収録版との比較。括弧書きは条文の文言そのまま。当分の間は暫定基準。"}</p>
+        <p>告示・条例の上乗せ基準は含まない。${matrix
+    ? "並びと別表の意味は src/layouts の Markdown で指定しています。"
+    : "並びはAPIが返した順。"}Excelは改正（施行）年ごとにシートを分けています。</p>
       </footer>
     </section>`;
   els.detail.querySelectorAll(".export").forEach((btn) => {
@@ -434,6 +447,42 @@ function renderEra(era) {
         </table>
       </div>
       ${notes}
+    </article>`;
+}
+
+function renderMatrixEra(era) {
+  const notes = era.starNotes.length
+    ? `<ul class="star-notes">${era.starNotes.map((n) => {
+      if (n.kind === "new") return `<li><strong>${escapeHtml(n.item)}</strong>: この版で追加</li>`;
+      const diffs = (n.diffs || []).map((d) => `${escapeHtml(d.column)} ${escapeHtml(d.from)} → ${escapeHtml(d.to)}`).join("、");
+      return `<li><strong>${escapeHtml(n.item)}</strong>: ${diffs}</li>`;
+    }).join("")}</ul>`
+    : "";
+  const fallback = era.apiOrder
+    ? `<p class="status status--empty">この版の並び順はAPI取得結果の順。物質の構成が指定と異なるため。</p>`
+    : "";
+  return `
+    <article class="era">
+      <h3>施行 ${escapeHtml(era.start)} 〜 ${escapeHtml(era.end)}</h3>
+      <div class="table-wrap">
+        <table class="matrix">
+          <thead>
+            <tr>${era.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr>
+          </thead>
+          <tbody>
+            ${era.body.map((row) => {
+              const name = row.removed ? `（${row.item} はこの版で廃止）` : `${row.star}${row.item}`;
+              return `<tr class="${row.removed ? "is-removed" : ""}">
+                <td>${escapeHtml(row.group)}</td>
+                <td>${escapeHtml(name)}</td>
+                ${row.cells.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+      ${notes}
+      ${fallback}
     </article>`;
 }
 

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 export async function resolve(specifier, context, nextResolve) {
-  if (specifier.endsWith(".txt?raw") || specifier.endsWith(".txt")) {
+  if (/\.(txt|md)(\?raw)?$/.test(specifier)) {
     const bare = specifier.replace(/\?raw$/, "");
     const resolved = await nextResolve(bare, context);
     return { url: resolved.url, format: "module", shortCircuit: true };
@@ -12,7 +12,7 @@ export async function resolve(specifier, context, nextResolve) {
 
 export async function load(url, context, nextLoad) {
   const file = url.split("?")[0];
-  if (file.endsWith(".txt")) {
+  if (file.endsWith(".txt") || file.endsWith(".md")) {
     const source = readFileSync(fileURLToPath(file), "utf8");
     return {
       format: "module",
