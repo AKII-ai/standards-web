@@ -5,15 +5,24 @@ export function eraYear(era) {
 }
 
 export function uniqueName(base, used, max = 80) {
-  let name = base.slice(0, max) || "基準値";
+  const dot = base.lastIndexOf(".");
+  const hasExt = dot > 0 && !base.slice(dot + 1).includes(" ");
+  const stem = hasExt ? base.slice(0, dot) : base;
+  const ext = hasExt ? base.slice(dot) : "";
   let n = 2;
+  let name = `${stem}${ext}`.slice(0, max) || "基準値";
   while (used.has(name)) {
     const suffix = ` ${n}`;
-    name = `${base.slice(0, max - suffix.length)}${suffix}`;
+    const room = Math.max(1, max - suffix.length - ext.length);
+    name = `${stem.slice(0, room)}${suffix}${ext}`;
     n += 1;
   }
   used.add(name);
   return name;
+}
+
+export function eraStamp(era) {
+  return era.start || eraYear(era);
 }
 
 export function safeDownloadName(title) {

@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from "fflate";
-import { eraTable, eraYear, kindLabel, safeDownloadName, uniqueName } from "./table.js";
+import { eraStamp, kindLabel, safeDownloadName, uniqueName } from "./table.js";
 
 function escapeCell(s) {
   return String(s ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
@@ -30,8 +30,7 @@ export function downloadStandardsMd({ title, eras, mode, withChanges }) {
   const used = new Set();
   const files = {};
   for (const era of eras) {
-    const year = eraYear(era);
-    const base = `${year} ${safeDownloadName(title)}.md`;
+    const base = `${eraStamp(era)} ${safeDownloadName(title)}.md`;
     const name = uniqueName(base, used, 120);
     files[name] = strToU8(eraMarkdown(title, era, mode, withChanges));
   }
