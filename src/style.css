@@ -264,6 +264,10 @@ th, td {
 
 th { background: #f3f3f3; }
 
+td.is-changed { background: #fff3c4; }
+
+.change-from { color: #c40000; }
+
 table.matrix { font-size: 0.85rem; }
 
 tr.is-removed td { color: #777; text-decoration: line-through; }

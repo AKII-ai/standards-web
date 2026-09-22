@@ -32,8 +32,8 @@ export function downloadStandardsXlsx({ title, eras, mode }) {
       header = era.headers;
       body = era.body.map((row) => [
         row.group,
-        row.removed ? `（${row.item} はこの版で廃止）` : `${row.star}${row.item}`,
-        ...row.cells,
+        row.removed ? `（${row.item} はこの版で廃止）` : row.item,
+        ...row.cells.map((c, i) => (row.notes?.[i] ? `${c}（${row.notes[i]}）` : c)),
       ]);
       cols = header.map((_, i) => ({ wch: i <= 1 ? 28 : 22 }));
     } else {
@@ -42,7 +42,9 @@ export function downloadStandardsXlsx({ title, eras, mode }) {
         r.table,
         r.item_raw,
         r.condition,
-        r.mark === "removed" ? `（この版で廃止。旧値 ${r.value_raw}）` : formatValue(r),
+        r.mark === "removed"
+          ? `（この版で廃止。旧値 ${r.value_raw}）`
+          : `${formatValue(r)}${r.changeNote ? `（${r.changeNote}）` : ""}`,
         r.value_raw,
         `${era.start} 〜 ${era.end}`,
       ]);

@@ -169,22 +169,19 @@ export function groupByEra(rows) {
     for (const r of current) {
       const k = `${r.table}\t${r.item_raw}\t${r.condition}`;
       let mark = "";
+      let changeNote = "";
       if (prev) {
         if (!prevMap.has(k)) {
           mark = "new";
-          starNotes.push({ kind: "new", item: r.item_raw, table: r.table });
+          changeNote = "この版で追加";
         } else if (prevMap.get(k).value_raw !== r.value_raw) {
           mark = "changed";
-          starNotes.push({
-            kind: "changed",
-            item: r.item_raw,
-            table: r.table,
-            from: formatValue(prevMap.get(k)),
-            to: formatValue(r),
-          });
+          const from = formatValue(prevMap.get(k));
+          const to = formatValue(r);
+          changeNote = `${from} → ${to}`;
         }
       }
-      rowsOut.push({ ...r, mark });
+      rowsOut.push({ ...r, mark, changeNote });
     }
     if (prev) {
       for (const [k, old] of prevMap) {

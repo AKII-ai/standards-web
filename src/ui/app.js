@@ -36,6 +36,11 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+function changeFrom(note) {
+  if (!note) return "";
+  return `<span class="change-from">（${escapeHtml(note)}）</span>`;
+}
+
 function bindCards(root) {
   root.querySelectorAll("[data-law-id]").forEach((btn) => {
     btn.addEventListener("click", () => selectLaw(btn.dataset.lawId, btn.dataset.title));
@@ -401,8 +406,8 @@ function renderDetail(title, lawId, bodies) {
       </p>
       <footer class="notes">
         <p>${matrix
-    ? "★は1つ前の収録版からの追加物質または基準値の変更（物質名の前に1回）。該当しない組合せは－。"
-    : "★新設／★改正は、1つ前の収録版との比較。括弧書きは条文の文言そのまま。当分の間は暫定基準。"}</p>
+    ? "黄色は、1つ前の収録版から追加または変更があった物質です。赤いかっこ書きは、そのセルの変更前の値、または追加であることです。該当しない組合せは－。"
+    : "黄色は、1つ前の収録版と比べて追加または変更があった項目と基準です。赤いかっこ書きは変更の内容です。括弧書きの基準は条文の文言そのまま。当分の間は暫定基準。"}</p>
         <p>告示・条例の上乗せ基準は含まない。${matrix
     ? "並びと別表の意味は src/layouts の Markdown で指定しています。"
     : "並びはAPIが返した順。"}Excelは改正（施行）年ごとにシートを分けています。列の境目をドラッグすると、その列の幅が変わります。</p>
@@ -520,13 +525,6 @@ function bindTableResize() {
 }
 
 function renderEra(era) {
-  const notes = era.starNotes.length
-    ? `<ul class="star-notes">${era.starNotes.map((n) => {
-      const item = escapeHtml(n.item.slice(0, 50));
-      if (n.kind === "new") return `<li><strong>${item}</strong>（${escapeHtml(n.table)}）: この版で追加</li>`;
-      return `<li><strong>${item}</strong>（${escapeHtml(n.table)}）: ${escapeHtml(n.from)} → ${escapeHtml(n.to)}</li>`;
-    }).join("")}</ul>`
-    : "";
   return `
     <article class="era">
       <h3>施行 ${escapeHtml(era.start)} 〜 ${escapeHtml(era.end)}</h3>
@@ -539,32 +537,24 @@ function renderEra(era) {
           </thead>
           <tbody>
             ${era.rows.map((r) => {
-              const mark = r.mark === "new" ? " ★新設" : r.mark === "changed" ? " ★改正" : "";
               const removed = r.mark === "removed";
-              const val = removed ? escapeHtml(`（${r.value_raw}）`) : escapeHtml(formatValue(r)) + mark;
+              const changed = r.mark === "new" || r.mark === "changed";
+              const val = removed ? escapeHtml(`（${r.value_raw}）`) : escapeHtml(formatValue(r));
               return `<tr class="${removed ? "is-removed" : ""}">
                 <td>${escapeHtml(r.table)}</td>
-                <td>${escapeHtml(r.item_raw)}</td>
+                <td class="${changed ? "is-changed" : ""}">${escapeHtml(r.item_raw)}</td>
                 <td>${escapeHtml(r.condition)}</td>
-                <td>${val}</td>
+                <td class="${changed ? "is-changed" : ""}">${val}${changeFrom(r.changeNote)}</td>
               </tr>`;
             }).join("")}
           </tbody>
         </table>
         </div>
       </div>
-      ${notes}
     </article>`;
 }
 
 function renderMatrixEra(era) {
-  const notes = era.starNotes.length
-    ? `<ul class="star-notes">${era.starNotes.map((n) => {
-      if (n.kind === "new") return `<li><strong>${escapeHtml(n.item)}</strong>: この版で追加</li>`;
-      const diffs = (n.diffs || []).map((d) => `${escapeHtml(d.column)} ${escapeHtml(d.from)} → ${escapeHtml(d.to)}`).join("、");
-      return `<li><strong>${escapeHtml(n.item)}</strong>: ${diffs}</li>`;
-    }).join("")}</ul>`
-    : "";
   const fallback = era.apiOrder
     ? `<p class="status status--empty">この版の並び順はAPI取得結果の順。物質の構成が指定と異なるため。</p>`
     : "";
@@ -580,18 +570,19 @@ function renderMatrixEra(era) {
           </thead>
           <tbody>
             ${era.body.map((row) => {
-              const name = row.removed ? `（${row.item} はこの版で廃止）` : `${row.star}${row.item}`;
+              const name = row.removed ? `（${row.item} はこの版で廃止）` : row.item;
+              const rowChanged = row.changed?.some(Boolean);
+              const mark = rowChanged ? "is-changed" : "";
               return `<tr class="${row.removed ? "is-removed" : ""}">
-                <td>${escapeHtml(row.group)}</td>
-                <td>${escapeHtml(name)}</td>
-                ${row.cells.map((c) => `<td>${escapeHtml(c)}</td>`).join("")}
+                <td class="${mark}">${escapeHtml(row.group)}</td>
+                <td class="${mark}">${escapeHtml(name)}</td>
+                ${row.cells.map((c, i) => `<td class="${row.changed?.[i] ? "is-changed" : ""}">${escapeHtml(c)}${changeFrom(row.notes?.[i])}</td>`).join("")}
               </tr>`;
             }).join("")}
           </tbody>
         </table>
         </div>
       </div>
-      ${notes}
       ${fallback}
     </article>`;
 }

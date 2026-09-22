@@ -78,28 +78,30 @@ export function buildMatrixEras(rows, layout) {
     for (const ik of rowIter) {
       const cells = {};
       for (const c of colNames) cells[c] = matrixCell(cur.get(ik)?.[c], ik);
-      let star = "";
+      const changed = {};
+      const notes = {};
       if (prev) {
         if (!prev.has(ik)) {
-          star = "★";
-          starNotes.push({ kind: "new", item: ik });
+          for (const c of colNames) {
+            changed[c] = true;
+            if (cells[c] !== "－") notes[c] = "この版で追加";
+          }
         } else {
-          const diffs = [];
           for (const c of colNames) {
             const from = matrixCell(prev.get(ik)?.[c], ik);
-            if (from !== cells[c]) diffs.push({ column: c, from, to: cells[c] });
-          }
-          if (diffs.length) {
-            star = "★";
-            starNotes.push({ kind: "changed", item: ik, diffs });
+            if (from !== cells[c]) {
+              changed[c] = true;
+              notes[c] = `${from} → ${cells[c]}`;
+            }
           }
         }
       }
       body.push({
         group: layout.groupOf[ik] || "",
         item: ik,
-        star,
         cells: colNames.map((c) => cells[c]),
+        notes: colNames.map((c) => notes[c] || ""),
+        changed: colNames.map((c) => Boolean(changed[c])),
         removed: false,
       });
     }
@@ -109,8 +111,9 @@ export function buildMatrixEras(rows, layout) {
         body.push({
           group: layout.groupOf[ik] || "",
           item: ik,
-          star: "",
           cells: colNames.map(() => "－"),
+          notes: colNames.map(() => ""),
+          changed: colNames.map(() => false),
           removed: true,
         });
       }
