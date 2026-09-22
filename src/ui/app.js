@@ -1,4 +1,5 @@
 import { describeCorsFailure, fetchLawData, fetchRevisions, searchLaws } from "../api/egov.js";
+import { downloadStandardsMd } from "../export/md.js";
 import { downloadStandardsXlsx } from "../export/xlsx.js";
 import { extractRecords, formatValue, groupByEra } from "../extract/extract.js";
 import { buildMatrixEras } from "../extract/matrix.js";
@@ -355,6 +356,40 @@ function backControl() {
   return `<p class="nav-back"><a class="back" href="#/">法令一覧に戻る</a></p>`;
 }
 
+function exportToolbar(pos) {
+  const extra = pos === "bottom" ? " toolbar--bottom" : "";
+  return `
+      <p class="toolbar${extra}">
+        <a class="back" href="#/">法令一覧に戻る</a>
+        <span class="export-box">
+          <label><input type="radio" name="export-kind-${pos}" value="values" checked> 基準値のみ</label>
+          <label><input type="radio" name="export-kind-${pos}" value="changes"> 変更内容を追記</label>
+          <button type="button" class="export" data-export="xlsx">Excel出力</button>
+          <button type="button" class="export" data-export="md">Markdown出力</button>
+        </span>
+      </p>`;
+}
+
+function bindExport(payload) {
+  const radios = [...els.detail.querySelectorAll('input[type="radio"][name^="export-kind-"]')];
+  radios.forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked) return;
+      radios.forEach((other) => {
+        if (other.value === radio.value) other.checked = true;
+      });
+    });
+  });
+  els.detail.querySelectorAll("[data-export]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const withChanges = Boolean(els.detail.querySelector('input[name^="export-kind-"]:checked[value="changes"]'));
+      const data = { ...payload, withChanges };
+      if (btn.dataset.export === "md") downloadStandardsMd(data);
+      else downloadStandardsXlsx(data);
+    });
+  });
+}
+
 function renderDetail(title, lawId, bodies) {
   const rows = bodies.flatMap((data) => extractRecords(data));
   const { dates, eras } = groupByEra(rows);
@@ -377,9 +412,10 @@ function renderDetail(title, lawId, bodies) {
   }
   const layout = getLayout(lawId);
   const matrix = layout ? buildMatrixEras(rows, layout) : null;
-  lastExport = matrix
+  const payload = matrix
     ? { title, mode: "matrix", eras: matrix.eras }
     : { title, eras };
+  lastExport = payload;
   const usedDates = matrix ? matrix.dates : dates;
   setStatus(matrix
     ? `${matrix.eras.reduce((n, e) => n + e.body.length, 0)}物質（${usedDates.length}版）`
@@ -388,10 +424,7 @@ function renderDetail(title, lawId, bodies) {
   els.detail.innerHTML = `
     ${backControl()}
     <section class="panel">
-      <p class="toolbar">
-        <a class="back" href="#/">法令一覧に戻る</a>
-        <button type="button" class="export" id="export-xlsx">Excel出力</button>
-      </p>
+      ${exportToolbar("top")}
       <header class="detail-head">
         <h2>${escapeHtml(title)}</h2>
         <p class="detail-meta">
@@ -400,24 +433,17 @@ function renderDetail(title, lawId, bodies) {
         </p>
       </header>
       ${matrix ? matrix.eras.map(renderMatrixEra).join("") : eras.map(renderEra).join("")}
-      <p class="toolbar toolbar--bottom">
-        <a class="back" href="#/">法令一覧に戻る</a>
-        <button type="button" class="export" id="export-xlsx-bottom">Excel出力</button>
-      </p>
+      ${exportToolbar("bottom")}
       <footer class="notes">
         <p>${matrix
     ? "黄色は、1つ前の収録版から追加または変更があった物質です。赤いかっこ書きは、そのセルの変更前の値、または追加であることです。該当しない組合せは－。"
     : "黄色は、1つ前の収録版と比べて追加または変更があった項目と基準です。赤いかっこ書きは変更の内容です。括弧書きの基準は条文の文言そのまま。当分の間は暫定基準。"}</p>
         <p>告示・条例の上乗せ基準は含まない。${matrix
     ? "並びと別表の意味は src/layouts の Markdown で指定しています。"
-    : "並びはAPIが返した順。"}Excelは改正（施行）年ごとにシートを分けています。列の境目をドラッグすると、その列の幅が変わります。</p>
+    : "並びはAPIが返した順。"}Excelは改正（施行）年ごとにシートを分けます。Markdownは年ごとのファイルをZIPにまとめます。どちらも「基準値のみ」か「変更内容を追記」を選べます。列の境目をドラッグすると、その列の幅が変わります。</p>
       </footer>
     </section>`;
-  els.detail.querySelectorAll(".export").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (lastExport) downloadStandardsXlsx(lastExport);
-    });
-  });
+  bindExport(payload);
   colShares = null;
   layoutColumns();
 }

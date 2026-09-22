@@ -110,11 +110,24 @@ h1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin: 0 0 12px;
 }
 
 .toolbar--bottom { margin: 20px 0 8px; }
+
+.export-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.export-box label {
+  color: #222;
+  font-size: 0.9rem;
+}
 
 .nav-back { margin: 0 0 12px; }
 
