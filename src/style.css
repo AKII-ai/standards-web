@@ -157,6 +157,8 @@ h1 {
   font: inherit;
 }
 
+.law-card[hidden] { display: none; }
+
 .law-card:hover,
 .law-card:focus-visible { background: #f3f6fb; }
 
